@@ -10,7 +10,7 @@ class MainView : View("Algorithms Practice") {
         label(title) {
             addClass(Styles.heading)
         }
-        label("Please select a Unit")
+        label("Please select from Unit")
         button("III Data Structures") {
             action {
                 replaceWith(DataStructuresView::class)
