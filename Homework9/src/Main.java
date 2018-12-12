@@ -82,7 +82,6 @@ import java.util.*;
  * Edge
  * x kg of product i can be traded for y kg of product j
  */
-@SuppressWarnings("SuspiciousNameCombination")
 class Edge {
     int i, j;
     private double x, y;
@@ -100,7 +99,7 @@ class Edge {
 
     @Override
     public String toString() {
-        return String.format("%d %d %f %f", i + 1, j + 1, x, y);
+        return String.format("%d %d %.3f %.3f", i + 1, j + 1, x, y);
     }
 }
 
@@ -110,7 +109,6 @@ class Edge {
  * G : Adjacency Matrix describing exchange rate between products
  * E : List of all edges in the Graph
  */
-@SuppressWarnings({"unchecked", "SuspiciousNameCombination", "FieldCanBeLocal"})
 class Homework9 {
     private static final double oo = -1.0;
     private static int n;
@@ -128,44 +126,74 @@ class Homework9 {
      * Time complexity: O(V * E)
      * Space complexity: O(V)
      * An implementation of the Bellman-Ford used to detect a negative cycle.
+     * <p>
+     * This algorithm differs in specifically what it is we are measuring and how we compare it.
+     * As opposed to the typical measure of distance, we are here measuring and comparing mass.
+     * A weight is more costly not if it covers greater distance, but if it results in fewer mass.
+     * Thus, a negative edge is one in which mass is gained.
      *
      * @return : the negative cycle represented by a sequence of edges
      */
-    private static Stack<Edge> bellmanFord(int start) {
-        Stack<Edge> result = new Stack<>();
-
+    private static Result bellmanFord() {
         // initialize
         double[] mass = new double[n];
         int[] predecessor = new int[n];
         Arrays.fill(mass, oo);
         Arrays.fill(predecessor, -1);
-        mass[start] = 1.0;
+        mass[0] = 1.0;
 
-        // relax
-        for (int i = 1; i < n; i++) {
-            for (Edge e : E) {
+        // relaxing all takes n^2 time
+        for (int i = 1; i < n; i++)
+            for (Edge e : E)
                 if (e.exchange(mass[e.i]) > mass[e.j]) {
                     mass[e.j] = e.exchange(mass[e.i]);
                     predecessor[e.j] = e.i;
                 }
-            }
+
+        // check for negative cycle takes at most n time
+        for (Edge e : E)
+            if (e.exchange(mass[e.i]) > mass[e.j]) // has negative cycle
+                return new Result(mass, predecessor, e.i);
+
+        return null;
+    }
+
+    private static class Result {
+        double[] mass;
+        int[] predecessor;
+        int start;
+        double exchangeResult = 1.0;
+        Stack<Edge> sequence = new Stack<>();
+
+        Result(double[] mass, int[] predecessor, int start) {
+            this.mass = mass;
+            this.predecessor = predecessor;
+            this.start = start;
+
+            // building the sequence takes n time
+            int cur = start;
+            int pre = predecessor[start];
+            do {
+                Edge edge = getEdge(pre, cur);
+                if (edge == null) {
+                    System.out.println("Something went wrong...");
+                    break;
+                }
+                sequence.add(edge);
+                exchangeResult = edge.exchange(exchangeResult);
+                cur = pre;
+                pre = predecessor[cur];
+            } while (cur != start);
         }
 
-        // check for negative cycle
-        for (Edge e : E) {
-            if (e.exchange(mass[e.i]) > mass[e.j]) { // has negative cycle
-                // build path
-                int cur = start;
-                int pre = predecessor[start];
-                do {
-                    result.add(getEdge(pre, cur));
-                    cur = pre;
-                    pre = predecessor[cur];
-                } while(cur != start);
-            }
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder("yes").append("\n");
+            while (!sequence.isEmpty())
+                sb.append(sequence.pop()).append("\n");
+            sb.append(String.format("one kg of product %d gets %.3f kg of product %d from the above sequence.", start + 1, exchangeResult, start + 1));
+            return sb.toString();
         }
-
-        return result;
     }
 
     private static Scanner getInputStream(String fp) {
@@ -190,28 +218,15 @@ class Homework9 {
         Scanner in = getInputStream(args.length >= 1 ? args[0] : "input.txt");
         PrintStream out = getOutputStream(args.length >= 2 ? args[1] : "output.txt");
 
+        // parsing input
         n = in.nextInt();
-
-        while(in.hasNext())
+        while (in.hasNext())
             E.add(new Edge(in));
 
-        for (int v = 0; v < n; v++) {
-            Stack<Edge> result = bellmanFord(v);
-            if (!result.isEmpty()) {
-                out.println("yes");
+        // computing
+        Result result = bellmanFord();
 
-                double mass = 1.0;
-
-                for (Edge e : result)
-                    mass = e.exchange(mass);
-
-                while(!result.isEmpty())
-                    out.println(result.pop());
-
-                out.printf("one kg of %d gets %.4f kg of %d from the above sequence.", v + 1, mass, v + 1);
-                return;
-            }
-        }
-        out.println("no");
+        // printing output
+        out.print(result != null ? result : "no");
     }
 }
