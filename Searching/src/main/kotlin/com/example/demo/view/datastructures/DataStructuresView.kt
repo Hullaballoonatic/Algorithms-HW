@@ -21,7 +21,7 @@ class DataStructuresView : View("III Data Structures") {
             }
         }
         center = vbox {
-            label("Please select a chapter")
+            label("Please select from chapter")
             button("12 Binary Search Trees") {
                 action {
                     replaceWith(BSTView::class)

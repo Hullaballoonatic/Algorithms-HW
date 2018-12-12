@@ -1,73 +1,98 @@
+@file:Suppress("unused", "MemberVisibilityCanBePrivate")
+
 package com.example.demo.model.datastructures.bst.redblacktrees
 
 import com.example.demo.model.datastructures.bst.WalkOrder
 import com.example.demo.model.datastructures.bst.WalkOrder.IN_ORDER
-import com.example.demo.model.datastructures.bst.redblacktrees.Color.*
+import com.example.demo.model.datastructures.bst.redblacktrees.Color.BLACK
+import com.example.demo.model.datastructures.bst.redblacktrees.Color.RED
+import com.example.demo.model.datastructures.bst.redblacktrees.RedBlackTreeProperties.*
 
-class RedBlackTree(var root: RedBlackNode? = null) {
-    val height: Int get() = root?.height ?: 0
+class RedBlackTree<E : Comparable<E>>(root: RedBlackNode<E>? = null) {
+    var root = root
+        set(v) {
+            field = v
+            v?.color = BLACK
+        }
 
-    val maxNode get() = root?.maxNode
-    val max: Int? get() = maxNode?.value
+    fun orderStatisticRank(node: RedBlackNode<E>): Int {
+        var r = node.rank
+        var y = node
+        while (y != root) {
+            if (y.isRightChild)
+                r += y.rank
+            y = y.parent as RedBlackNode<E>
+        }
+        return r
+    }
 
-    val minNode get() = root?.minNode
-    val min: Int? get() = minNode?.value
+    operator fun get(order: Int): RedBlackNode<E>? = root?.get(order)
+
+    val height: Int get() = root?.blackHeight ?: 0
+
+    val max get() = root?.max
+
+    val min get() = root?.min
 
     val isEmpty: Boolean = root == null
 
     fun asList(order: WalkOrder = IN_ORDER) = root?.walk(order) ?: emptyList()
 
-    operator fun contains(value: Int) = get(value) != null
+    operator fun contains(v: E) = get(v) != null
 
-    operator fun get(value: Int, r: RedBlackNode? = root) = r?.get(value)
+    operator fun get(v: E): RedBlackNode<E>? = root?.get(v) as RedBlackNode<E>?
+
+    val violations: List<RedBlackTreeProperties>
+        get() = listOf(Property1, Property2, Property3, Property4, Property5).filter { !it.check(this) }
 
     /**
      * Insert
-     * Do a BST insert then fix things
+     * Do from BST insert then fixUp things
      */
-    operator fun plusAssign(value: Int) = plusAssign(RedBlackNode(value, this, RED))
-    operator fun plusAssign(node: RedBlackNode) {
-        if (node.color != RED) throw Exception("Inserted Nodes must always be RED")
+    operator fun plusAssign(v: E) = plusAssign(RedBlackNode(v, RED))
 
-        var previousNode = root
-        var curNode = root
+    operator fun plusAssign(node: RedBlackNode<E>) {
+        var pre: RedBlackNode<E>? = null
+        var cur = root
 
-        while(curNode != null) {
-            previousNode = curNode
-            curNode = if (node < curNode) curNode.left else curNode.right
+        while (cur != null) {
+            pre = cur
+            cur = (if (node.value < cur.value) cur.left else cur.right) as RedBlackNode<E>?
         }
-
-        node.parent = previousNode
+        node.parent = pre
+        if (node.parent == null)
+            root = node
         insertFix(node)
     }
 
     /**
      * Delete
-     * do a bst delete while maintaining the node that is removed or moved as well as its color
-     * then fix things
+     * do from bst delete while maintaining the node that is removed or moved as well as its color
+     * then fixUp things
      */
-    operator fun minusAssign(value: Int) = minusAssign(get(value) ?: throw Exception("value does not exist in tree"))
-    operator fun minusAssign(node: RedBlackNode) {
-        var transfer: RedBlackNode? = null
-        var doFix = transfer?.color == BLACK
+    operator fun minusAssign(v: E) = minusAssign(get(v) ?: throw Exception("v does not exist in tree"))
+
+    operator fun minusAssign(node: RedBlackNode<E>) {
+        var xfer: RedBlackNode<E>? = null
+        var doFix = xfer?.color == BLACK
         when (node.children.size) {
             1 -> {
-                transfer = node.children.first()
-                node.transplantWith(node.children.first())
+                xfer = node.children.first() as RedBlackNode<E>?
+                node.transplantWith(node.children.first() as RedBlackNode<E>?)
+
+                if (node.isRoot) root = node.children.first() as RedBlackNode<E>?
             }
             2 -> {
-                val replacement = node.successor
+                val replacement = node.successor as RedBlackNode<E>?
 
-                if (replacement!!.color == BLACK) {
-                    doFix = true
-                }
+                doFix = replacement!!.color == BLACK
 
-                transfer = replacement.right
+                xfer = replacement.right as RedBlackNode<E>?
 
                 if (replacement == node.right) {
-                    transfer?.parent = replacement
+                    xfer?.parent = replacement
                 } else {
-                    replacement.transplantWith(replacement.right)
+                    replacement.transplantWith(replacement.right as RedBlackNode<E>?)
                     replacement.right = node.right
                     replacement.right?.parent = replacement
                 }
@@ -75,10 +100,12 @@ class RedBlackTree(var root: RedBlackNode? = null) {
                 replacement.left = node.left
                 replacement.left?.parent = node
                 replacement.color = node.color
+
+                if (node.isRoot) root = replacement
             }
         }
         node.delete()
-        if (doFix) deleteFix(transfer!!)
+        if (doFix) deleteFix(xfer!!)
     }
 
     /**
@@ -105,35 +132,38 @@ class RedBlackTree(var root: RedBlackNode? = null) {
      *
      * note: recoloring always involves parent and uncle become black, grandparent become red
      */
-    private fun insertFix(node: RedBlackNode) {
+    private fun insertFix(node: RedBlackNode<E>) {
         var inserted = node
-        while (inserted.parent?.color == RED) {
+        val iParent = inserted.parent as RedBlackNode<E>?
+        val iUncle = inserted.uncle as RedBlackNode<E>?
+        val iGrandparent = inserted.grandparent as RedBlackNode<E>?
+        while (iParent?.color == RED) {
             when {
-                inserted.uncle!!.color == RED -> {
-                    inserted.uncle!!.color = BLACK
-                    inserted.parent!!.color = BLACK
-                    inserted.grandparent!!.color = RED
-                    inserted = inserted.grandparent!!
+                iUncle!!.color == RED -> {
+                    iUncle.color = BLACK
+                    iParent.color = BLACK
+                    iGrandparent!!.color = RED
+                    inserted = inserted.grandparent!! as RedBlackNode<E>
                 }
-                inserted.parent!!.isLeftChild -> {
+                iParent.isLeftChild   -> {
                     if (inserted.isRightChild) {
-                        inserted = inserted.parent!!
+                        inserted = inserted.parent!! as RedBlackNode<E>
                         inserted.rotateLeft()
                     }
-                    inserted.uncle!!.color = BLACK
-                    inserted.parent!!.color = BLACK
-                    inserted.grandparent!!.color = RED
-                    inserted.grandparent!!.rotateLeft()
+                    iUncle.color = BLACK
+                    iParent.color = BLACK
+                    iGrandparent!!.color = RED
+                    iGrandparent.rotateLeft()
                 }
-                else                          -> {
+                else                  -> {
                     if (inserted.isLeftChild) {
-                        inserted = inserted.parent!!
+                        inserted = inserted.parent!! as RedBlackNode<E>
                         inserted.rotateRight()
                     }
-                    inserted.uncle!!.color = BLACK
-                    inserted.parent!!.color = BLACK
-                    inserted.grandparent!!.color = RED
-                    inserted.grandparent!!.rotateRight()
+                    iUncle.color = BLACK
+                    iParent.color = BLACK
+                    iGrandparent!!.color = RED
+                    iGrandparent.rotateRight()
                 }
             }
         }
@@ -141,47 +171,50 @@ class RedBlackTree(var root: RedBlackNode? = null) {
     }
 
     /**
-     * only case 2 causes the fix to repeat
+     * only case 2 causes the fixUp to repeat
      */
-    private fun deleteFix(node: RedBlackNode) {
+    private fun deleteFix(node: RedBlackNode<E>) {
         var transferred = node
+        val tSibling = transferred.sibling as RedBlackNode<E>?
+        val tParent = transferred.parent as RedBlackNode<E>?
+        val tUncle = transferred.uncle as RedBlackNode<E>?
         while (!transferred.isRoot && transferred.color == BLACK) {
-            if (transferred.sibling!!.color == RED) {
-                transferred.sibling!!.color = BLACK                             // case 1
-                transferred.parent!!.color = RED                                // case 1
-                transferred.parent!!.rotateLeft()                               // case 1
+            if (tSibling!!.color == RED) {
+                tSibling.color = BLACK                             // case 1
+                tParent!!.color = RED                                // case 1
+                tParent.rotateLeft()                               // case 1
             }
-            if (transferred.uncle!!.children.all { it.color == BLACK }) {
-                transferred.uncle!!.color = RED                                 // case 2
-                transferred = transferred.parent!!                              // case 2
+            if (tUncle!!.children.all { (it as RedBlackNode<E>).color == BLACK }) {
+                tUncle.color = RED                                 // case 2
+                transferred = transferred.parent!! as RedBlackNode<E>                             // case 2
             } else {
                 if (transferred.isLeftChild) {
-                    if (transferred.sibling!!.right?.color == BLACK) {
-                        transferred.sibling!!.left?.color = BLACK               // case 3
-                        transferred.sibling!!.color = RED                       // case 3
-                        transferred.sibling!!.rotateRight()                     // case 3
+                    if ((tSibling.right as RedBlackNode<E>?)?.color == BLACK) {
+                        (tSibling.left as RedBlackNode<E>?)?.color = BLACK               // case 3
+                        tSibling.color = RED                       // case 3
+                        tSibling.rotateRight()                     // case 3
                     }
-                    transferred.sibling!!.color = transferred.parent!!.color    // case 4
-                    transferred.parent!!.color = BLACK                          // case 4
-                    transferred.sibling!!.right!!.color = BLACK                 // case 4
-                    transferred.parent!!.rotateLeft()
+                    tSibling.color = tParent!!.color    // case 4
+                    tParent.color = BLACK                          // case 4
+                    (tSibling.right!! as RedBlackNode<E>).color = BLACK                 // case 4
+                    tParent.rotateLeft()
                 } else {
-                    if (transferred.sibling!!.left?.color == BLACK) {
-                        transferred.sibling!!.right?.color = BLACK              // case 3
-                        transferred.sibling!!.color = RED                       // case 3
-                        transferred.sibling!!.rotateLeft()                      // case 3
+                    if ((tSibling.left as RedBlackNode<E>?)?.color == BLACK) {
+                        (tSibling.right as RedBlackNode<E>?)?.color = BLACK              // case 3
+                        tSibling.color = RED                       // case 3
+                        tSibling.rotateLeft()                      // case 3
                     }
-                    transferred.sibling!!.color = transferred.parent!!.color    // case 4
-                    transferred.parent!!.color = BLACK                          // case 4
-                    transferred.sibling!!.left!!.color = BLACK                  // case 4
-                    transferred.parent!!.rotateRight()                          // case 4
+                    tSibling.color = tParent!!.color    // case 4
+                    tParent.color = BLACK                          // case 4
+                    (tSibling.left!! as RedBlackNode<E>).color = BLACK                  // case 4
+                    tParent.rotateRight()                          // case 4
                 }
             }
         }
         root!!.color = BLACK
     }
 
-    fun splitTree(root: RedBlackNode): Pair<RedBlackTree, RedBlackTree> {
+    fun splitTree(root: RedBlackNode<E>): Pair<RedBlackTree<E>, RedBlackTree<E>> {
         val newRoot = get(root.value)
         if (newRoot != null)
             if (newRoot.isLeftChild) newRoot.parent!!.left = null
